@@ -3,6 +3,21 @@ import pandas as pd
 import sqlite3
 from datetime import datetime
 import time
+import os
+
+# --- CONFIGURACIÓN Y CARPETAS ---
+# Definimos la ruta específica que solicitaste
+ruta_reportes = r"C:\Users\Mi PC\Documents\registro canchas"
+
+# Verificamos si la carpeta existe, si no, la creamos
+if not os.path.exists(ruta_reportes):
+    try:
+        os.makedirs(ruta_reportes)
+    except Exception as e:
+        # Respaldo en caso de error de permisos en Windows
+        ruta_reportes = 'reportes'
+        if not os.path.exists(ruta_reportes):
+            os.makedirs(ruta_reportes)
 
 # --- BASE DE DATOS ---
 def init_db():
@@ -23,6 +38,8 @@ def registrar_venta(cancha, inicio, fin, total):
               (cancha, inicio, fin, total, fecha_hoy))
     conn.commit()
     conn.close()
+    # Guardar automáticamente en la ruta especificada
+    actualizar_reporte_diario()
 
 def eliminar_registro(id_registro):
     conn = sqlite3.connect('gestion_canchas.db')
@@ -30,10 +47,23 @@ def eliminar_registro(id_registro):
     c.execute("DELETE FROM ventas WHERE id = ?", (id_registro,))
     conn.commit()
     conn.close()
+    actualizar_reporte_diario()
+
+def actualizar_reporte_diario():
+    """Guarda automáticamente la contabilidad en la ruta de Documentos"""
+    fecha_hoy = datetime.now().strftime("%Y-%m-%d")
+    conn = sqlite3.connect('gestion_canchas.db')
+    df = pd.read_sql_query(f"SELECT * FROM ventas WHERE fecha='{fecha_hoy}'", conn)
+    conn.close()
+    if not df.empty:
+        # Creamos la ruta completa combinando la carpeta y el nombre del archivo
+        nombre_archivo = f"contabilidad_{fecha_hoy}.csv"
+        ruta_completa = os.path.join(ruta_reportes, nombre_archivo)
+        df.to_csv(ruta_completa, index=False, encoding='utf-8-sig')
 
 # --- INTERFAZ ---
 init_db()
-st.set_page_config(page_title="Control Canchas familia ceron", layout="wide")
+st.set_page_config(page_title="Control Canchas Familia Cerón", layout="wide")
 
 st.markdown("""
     <style>
@@ -44,15 +74,17 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🏟️ Gestión de Canchas familia ceron - Tarifa: $130.000/hr")
+st.title("🏟️ Gestión de Canchas Familia Cerón")
+st.info(f"Reportes guardados en: {ruta_reportes}")
 
 TARIF_HORA = 130000
 
+# Inicializamos solo 2 canchas
 if 'canchas' not in st.session_state:
     st.session_state.canchas = {f"Cancha {i}": {"activa": False, "inicio": None} for i in range(1, 3)}
 
-# --- PANEL DE CANCHAS ---
-cols = st.columns(4)
+# --- PANEL DE CANCHAS (2 Columnas) ---
+cols = st.columns(2)
 
 for i, (nombre, datos) in enumerate(st.session_state.canchas.items()):
     with cols[i]:
@@ -61,7 +93,7 @@ for i, (nombre, datos) in enumerate(st.session_state.canchas.items()):
         
         if not datos["activa"]:
             container.markdown('<p class="estado-disponible">🟢 DISPONIBLE</p>', unsafe_allow_html=True)
-            if container.button(f"EMPEZAR JUEGO", key=f"start_{i}"):
+            if container.button(f"EMPEZAR JUEGO", key=f"start_{i}", use_container_width=True):
                 datos["activa"] = True
                 datos["inicio"] = datetime.now()
                 st.rerun()
@@ -75,14 +107,9 @@ for i, (nombre, datos) in enumerate(st.session_state.canchas.items()):
             h, r = divmod(segundos, 3600)
             m, s = divmod(r, 60)
             
-            # Cálculo base del cobro
             cobro_base = (segundos / 3600) * TARIF_HORA
             
-            # --- NUEVA OPCIÓN: DESCUENTO EN PESOS ---
-            # Agregamos un campo para ingresar el valor en pesos a descontar
-            valor_descuento = container.number_input("Descuento ($)", min_value=0, step=1000, key=f"desc_pesos_{i}")
-            
-            # Calculamos el cobro final (asegurando que no sea menor a cero)
+            valor_descuento = container.number_input("Descuento ($)", min_value=0, step=1000, key=f"desc_{i}")
             cobro_final = max(0, cobro_base - valor_descuento)
             
             container.markdown(f'<p class="cronometro">{h:02d}:{m:02d}:{s:02d}</p>', unsafe_allow_html=True)
@@ -92,42 +119,7 @@ for i, (nombre, datos) in enumerate(st.session_state.canchas.items()):
                 container.markdown(f'<p class="descuento-alerta">Menos Descuento: -${valor_descuento:,.0f}</p>', unsafe_allow_html=True)
                 container.write(f"### Total: ${cobro_final:,.0f}")
             else:
-                container.write(f"**Cobro:** ${cobro_final:,.0f} COP")
+                container.write(f"### Cobro: ${cobro_final:,.0f} COP")
             
-            if container.button(f"FINALIZAR Y COBRAR", key=f"stop_{i}"):
-                registrar_venta(nombre, datos["inicio"].strftime("%H:%M:%S"), ahora.strftime("%H:%M:%S"), round(cobro_final, 0))
-                datos["activa"] = False
-                datos["inicio"] = None
-                st.rerun()
-
-st.divider()
-
-# --- CONTADURÍA ---
-st.header("📊 Contabilidad del Día")
-
-conn = sqlite3.connect('gestion_canchas.db')
-fecha_actual = datetime.now().strftime("%Y-%m-%d")
-df = pd.read_sql_query(f"SELECT * FROM ventas WHERE fecha='{fecha_actual}'", conn)
-conn.close()
-
-if not df.empty:
-    m1, m2 = st.columns(2)
-    m1.metric("Veces utilizadas hoy", len(df))
-    m2.metric("Dinero conseguido hoy", f"${df['total'].sum():,.0f} COP")
-    
-    with st.expander("⚙️ Administrar registros"):
-        for index, row in df.iterrows():
-            r_col1, r_col2, r_col3, r_col4, r_col5 = st.columns([1, 2, 2, 2, 1])
-            r_col1.write(f"#{row['id']}")
-            r_col2.write(f"**{row['cancha']}**")
-            r_col3.write(f"{row['inicio']} - {row['fin']}")
-            r_col4.write(f"${row['total']:,.0f}")
-            if r_col5.button("🗑️", key=f"del_{row['id']}"):
-                eliminar_registro(row['id'])
-                st.rerun()
-else:
-    st.info("No hay movimientos registrados para hoy.")
-
-# Auto-actualización cada segundo para que el cronómetro se mueva
-time.sleep(1)
-st.rerun()
+            if container.button(f"FINALIZAR Y COBRAR", key=f"stop_{i}", use_container_width=True, type="primary"):
+                registrar_venta(nombre, datos["
