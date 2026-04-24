@@ -122,4 +122,49 @@ for i, (nombre, datos) in enumerate(st.session_state.canchas.items()):
                 container.write(f"### Cobro: ${cobro_final:,.0f} COP")
             
             if container.button(f"FINALIZAR Y COBRAR", key=f"stop_{i}", use_container_width=True, type="primary"):
-                registrar_venta(nombre, datos["
+                registrar_venta(nombre, datos["inicio"].strftime("%H:%M:%S"), ahora.strftime("%H:%M:%S"), round(cobro_final, 0))
+                datos["activa"] = False
+                datos["inicio"] = None
+                st.rerun()
+
+st.divider()
+
+# --- CONTADURÍA ---
+st.header("📊 Contabilidad del Día")
+
+conn = sqlite3.connect('gestion_canchas.db')
+fecha_actual = datetime.now().strftime("%Y-%m-%d")
+df = pd.read_sql_query(f"SELECT * FROM ventas WHERE fecha='{fecha_actual}'", conn)
+conn.close()
+
+if not df.empty:
+    m1, m2, m3 = st.columns([1, 1, 1])
+    m1.metric("Veces utilizadas hoy", len(df))
+    m2.metric("Dinero conseguido hoy", f"${df['total'].sum():,.0f} COP")
+    
+    # Botón de descarga manual (además del auto-guardado en la carpeta)
+    csv = df.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
+    m3.download_button(
+        label="📥 Descargar Reporte de hoy",
+        data=csv,
+        file_name=f"reporte_{fecha_actual}.csv",
+        mime="text/csv",
+    )
+    
+    with st.expander("⚙️ Administrar registros del día"):
+        for index, row in df.iterrows():
+            r_col1, r_col2, r_col3, r_col4, r_col5 = st.columns([1, 2, 2, 2, 1])
+            r_col1.write(f"#{row['id']}")
+            r_col2.write(f"**{row['cancha']}**")
+            r_col3.write(f"{row['inicio']} - {row['fin']}")
+            r_col4.write(f"${row['total']:,.0f}")
+            if r_col5.button("🗑️", key=f"del_{row['id']}"):
+                eliminar_registro(row['id'])
+                st.rerun()
+else:
+    st.info("No hay movimientos registrados para hoy.")
+
+# --- AUTO-REFRESCO ---
+if any(c["activa"] for c in st.session_state.canchas.values()):
+    time.sleep(5)
+    st.rerun()
