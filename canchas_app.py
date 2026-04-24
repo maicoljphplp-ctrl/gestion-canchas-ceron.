@@ -52,7 +52,7 @@ if 'canchas' not in st.session_state:
     st.session_state.canchas = {f"Cancha {i}": {"activa": False, "inicio": None} for i in range(1, 5)}
 
 # --- PANEL DE CANCHAS ---
-cols = st.columns(4)
+cols = st.columns(2)
 
 for i, (nombre, datos) in enumerate(st.session_state.canchas.items()):
     with cols[i]:
