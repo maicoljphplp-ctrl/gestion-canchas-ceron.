@@ -3,20 +3,6 @@ import pandas as pd
 import sqlite3
 from datetime import datetime
 import time
-import os
-
-# Crear la carpeta de registro canchas si no existe
-if not os.path.exists('registro canchas'):
-    os.makedirs('registro canchas')
-
-def exportar_a_csv(df):
-    if not df.empty:
-        fecha_hoy = datetime.now().strftime("%Y-%m-%d")
-        ruta = f"C:\Users\Mi PC\Documents\registro canchas{fecha_hoy}.csv"
-        # Guardar en la carpeta "registro canchas" con el nombre del día
-        df.to_csv(ruta, index=False, encoding='utf-8-sig')
-        return ruta
-    return None
 
 # --- BASE DE DATOS ---
 def init_db():
@@ -66,7 +52,7 @@ if 'canchas' not in st.session_state:
     st.session_state.canchas = {f"Cancha {i}": {"activa": False, "inicio": None} for i in range(1, 3)}
 
 # --- PANEL DE CANCHAS ---
-cols = st.columns(2)
+cols = st.columns(4)
 
 for i, (nombre, datos) in enumerate(st.session_state.canchas.items()):
     with cols[i]:
@@ -123,20 +109,6 @@ conn = sqlite3.connect('gestion_canchas.db')
 fecha_actual = datetime.now().strftime("%Y-%m-%d")
 df = pd.read_sql_query(f"SELECT * FROM ventas WHERE fecha='{fecha_actual}'", conn)
 conn.close()
-if not df.empty:
-    m1, m2 = st.columns(2)
-    m1.metric("Veces utilizadas hoy", len(df))
-    m2.metric("Dinero conseguido hoy", f"${df['total'].sum():,.0f} COP")
-# NUEVO: Botón para guardar/descargar
-    ruta_generada = exportar_a_csv(df)
-    
-    with open(ruta_generada, "rb") as file:
-        st.download_button(
-            label="📥 Descargar Reporte del Día (CSV)",
-            data=file,
-            file_name=os.path.basename(ruta_generada),
-            mime="text/csv"
-        )
 
 if not df.empty:
     m1, m2 = st.columns(2)
