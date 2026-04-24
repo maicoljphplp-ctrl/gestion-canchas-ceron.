@@ -49,7 +49,7 @@ st.title("🏟️ Gestión de Canchas familia ceron - Tarifa: $130.000/hr")
 TARIF_HORA = 130000
 
 if 'canchas' not in st.session_state:
-    st.session_state.canchas = {f"Cancha {i}": {"activa": False, "inicio": None} for i in range(1, 5)}
+    st.session_state.canchas = {f"Cancha {i}": {"activa": False, "inicio": None} for i in range(1, 3)}
 
 # --- PANEL DE CANCHAS ---
 cols = st.columns(2)
